@@ -1,0 +1,278 @@
+---
+title: "Los Angeles Demographics Lab"
+author: "Myron Bañez | CPLN 6200: Techniques of Urban Economic Development"
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    toc: true
+    toc_float: true
+editor_options: 
+  markdown: 
+    wrap: sentence
+  chunk_output_type: console
+---
+
+# Introduction
+This document serves as a demographic profile of Los Angeles County using 2010 to 2020 data from the American Community Survey. The regional demographic profile is useful in understanding the characteristics that makes the region unique. Moving forward, this knowledge of the regional demographic profile serves as a foundation in conducting further analysis on the economic profile for Los Angeles County  
+```{r eval=TRUE, echo=TRUE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidycensus)
+library(sf)
+library(tidyverse)
+library(sf)
+library(lubridate)
+library(tigris)
+library(gganimate)
+library(riem)
+library(gridExtra)
+library(knitr)
+library(kableExtra)
+library(mapview)
+library(tidycensus)
+library(ggcorrplot)
+library(RColorBrewer)
+library(stargazer)
+library(ggplot2)
+theme_set(theme_bw())
+
+if(!require(pacman)){install.packages("pacman"); library(pacman)}
+p_load(tidyverse, here, janitor)
+
+options(scipen=999)
+
+palette9 <- c("#fff600", "#ffdd00", "#fdcc0d", "#e6b70f", "#8649d1", "#7225d0", "#6813d0", "#630ad0", "#5000b8")
+
+palette24 <- c("#dbaf00","#fdc500","#ffd500","#ffee32","#cea7ee","#b67be6","#9d4edd","#72369d","#461e5c","#2b2d42", "#ffcdb2","#ffb4a2","#e5989b","#b5838d", "#d9ed92","#b5e48c","#99d98c","#76c893","#52b69a","#34a0a4","#168aad","#1a759f","#1e6091","#184e77")
+```
+
+```{r eval=TRUE, echo=TRUE, warning=FALSE, message=FALSE}
+la_estimates <- get_estimates(geography = "cbsa", product = "population", time_series = TRUE, output = "tidy")
+la_comps <- get_estimates(geography = "cbsa", product = "components", time_series = TRUE, output = "tidy")
+
+la_estimates <- clean_names(la_estimates, "snake")
+la_comps <- clean_names(la_comps, "snake")
+
+la_estimates <- la_estimates %>%
+filter(variable == "POP" & geoid == "31080")
+la_comps <- la_comps %>%
+  filter(geoid == "31080")
+```
+
+# High Level Demographics
+The follow section looks at demographic estimates including: population, natural increase, and migration for Los Angeles County, providing high level information regarding the features that drive the region towards growth or decline. 
+
+Note: The date columns ranging from 1-12 or 1-10 represent the years 2010-2021 and 2010-2019 respectively.
+
+## Population 
+```{r eval=TRUE, echo=TRUE, warning=FALSE, message=FALSE}
+pop_plot1 <- ggplot(la_estimates, aes(x = date, y = value)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Figure 1: Los Angeles County Population Estimates", x = "Date", y = "Population") +
+  scale_x_continuous(breaks = c("1":"12")) +
+  scale_y_continuous(labels = scales::comma)
+pop_plot1
+```
+
+Figure 1 indicates three distinct periods in Los Angeles County's population growth/decline. The first period from 2010-2012 (Date 1-3) displays rather flat population growth staying consistently at approximately 12,825,000 people. However in the second period from 2013-2019 (Date 4-10), population growth skyrockets to 13,275,000 people living in Los Angeles County. The last period indicates that from 2020 to present day, (Date 11-12), there is a steady decrease in the region's population.
+
+## Natural Increase
+```{r}
+natural_increase <- la_comps %>% filter(variable == "NATURALINC" | variable == "NETMIG")
+
+migration <- la_comps %>% filter(variable == "DOMESTICMIG"| variable == "INTERNATIONALMIG")
+
+nat_increase_plot <- ggplot(natural_increase, aes(x = period, y = value,
+                                                  group = variable, fill = variable)) +
+  geom_col(position = "stack") +
+  theme_minimal() +
+  theme(legend.position = "bottom", legend.text = element_text(size = 8),
+        legend.title = element_text(size = 10)) +
+  labs(x = "Date", y = "",
+       caption = "Source: US Census Population Estimates, 2010-2019",
+       title = "Figure 2: Net Migration/Natural Increase comparison \nLos Angeles County 2010-2019") +
+  geom_hline(yintercept = 0) +
+  scale_x_continuous(breaks = c("1":"10")) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_fill_manual(name = "Pop. Components",
+                      values = c("#fcc602", "#4c257e"),
+                      breaks = c("NETMIG", "NATURALINC"),
+                      labels = c("Net Migration", "Natural Increase"))
+nat_increase_plot
+```
+
+Net migration refers to the number of people who are moving in or out of the region. Figure 2 indicates that From 2010-2019, people have been migrating out of the region, and as of 2015 the number of people migrating out have been increasing. Natural increase (or decrease) refers to the number of births and deaths that occur in the region. From 2011 to present day, there has been steady natural decrease, which may suggest that Los Angeles County is experiencing more deaths than births.
+
+After taking into account the net migration and natural increase, these figures explain the population decrease as seen in figure 1. It is clear that in the region, death is increasing and people are moving out. 
+
+## Migration
+```{r eval=TRUE, echo=TRUE, warning=FALSE, message=FALSE}
+migration_plot <- ggplot(migration, aes(x = period, y = value,
+                                        group = variable, fill = variable)) +
+  geom_col(position = "stack") +
+  theme_minimal() +
+  theme(legend.position = "bottom", legend.text = element_text(size = 8),
+        legend.title = element_text(size = 10)) +
+  labs(x = "Date", y = "",
+       caption = "Source: US Census Population Estimates, 2010-2019",
+       title = "Figure 3: Domestic vs International comparison \nLos Angeles County 2010-2019") +
+  geom_hline(yintercept = 0) +
+  scale_x_continuous(breaks = c("1":"10")) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_fill_manual(name = "Pop. Components",
+                      values = c("#fcc602", "#4c257e"),
+                      breaks = c("DOMESTICMIG", "INTERNATIONALMIG"),
+                      labels = c("Domestic", "International")) 
+migration_plot
+```
+
+Figure 3 conveys the different migration patterns in and out of Los Angeles County for domestic and international migration. There is a slight pattern in the domestic migration patterns where it seems that domestic migration increases and decreases after every four years. For example from 2012 to 2015, domestic migration paterns increase, while it decreases from 2016 to 2019, then increases again. The same can not be said for international migration as there is a constant decrease in international migration.
+
+# Characteristics
+The following section looks at age, race, and education as characteristics of the regional demographic profile. 
+```{r eval=TRUE, echo=TRUE, warning=FALSE, message=FALSE}
+la_vars <- load_variables(year = 2020, dataset = "acs5", cache = TRUE)
+
+la_age <- get_acs(geography = "cbsa", table = "B01001", year = 2020)
+la_age <- la_age %>%
+clean_names("snake") %>%
+filter(geoid == "31080")
+
+la_race <- get_acs(geography = "cbsa", table = "B02001", year = 2020)
+la_race <- la_race %>%
+clean_names("snake") %>%
+filter(geoid == "31080")
+
+la_ed <- get_acs(geography = "cbsa", table = "B15003", year = 2020)
+la_ed <- la_ed %>%
+clean_names("snake") %>%
+filter(geoid == "31080")
+```
+
+## Age
+The age data will first be prepared in order to create a dataset with readable age groups and determining the share of each population group. 
+```{r eval=TRUE, echo=TRUE, warning=FALSE, message=FALSE}
+la_age <- la_age %>%
+  mutate(tot_pop = 13211027) %>%
+  filter(variable != "B01001_001" & variable != "B01001_002" & variable != "B01001_026")
+
+agegroups <- c("0-4", "5-9", "10-14", "15-17", "18-19", "20", "21", "22-24", "25-29","30-34","35-39", "40-44", "45-49", "50-54", "55-59", "60-61", "62-64",
+               "65-66", "67-69", "70-74", "75-79","80-84", "85+")
+
+agesex <- c(paste("Male", agegroups),
+            paste("Female", agegroups))
+
+la_age <- la_age %>%
+  mutate(age_sex_groups = rep(agesex, length(unique(name))))
+
+la_age <- la_age %>%
+  mutate(pop_share = estimate/tot_pop) %>%
+  select(estimate, age_sex_groups, pop_share)
+```
+
+There are several interesting features of the age pyramid for Los Angeles County. From age 15 to 24, there is a decrease in both demales and males, which may be explained by individuals moving out of the region for education such as boarding school or university, as well as people who may be moving out for employment in other areas. The 25-29 age group increases drastically, which may indicate that more people within this age group are moving to the region as they progress in their career or to start a family. The gender breakdown is rather even, however in the 80-84 and 85+ age groups, the number of females seems to be twice the number of males.
+
+```{r eval=TRUE, echo=TRUE, warning=FALSE, message=FALSE}
+la_age2 <- la_age %>% 
+  separate(age_sex_groups, into = c("sex", "age"), sep = " ") %>%
+  mutate(age = factor(age, levels = unique(age)),
+percent = ifelse(sex == "Female", pop_share, -pop_share))
+
+xlabs <- c("0-4", "5-9", "10-14", "15-17", "18-19", "20", "21", "22-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-61", "62-64", "65-66",
+           "67-69","70-74", "75-79", "80-84", "85+")
+
+ggplot(la_age2, aes(x = age, y = percent, fill = sex)) +
+  geom_col(width = .9, alpha = .75) +
+  scale_y_continuous(breaks = c(-.04, 0, .04),
+                     labels = c("4%", "0%", "4%")) +
+  coord_flip() +
+  theme_minimal() +
+  scale_x_discrete(labels = xlabs) +
+  scale_fill_manual(values = c("#fcc602", "#4c257e")) +
+  theme(strip.text.x = element_text(size = 6)) +
+  labs(x = "", y = "", fill = "",
+       title = "Figure 4: Age Pyramid for Los Angeles County ACS 5-year 2020",
+       caption = "Source: American Community Survey,\n2016-2020 using tidycensus")
+```
+
+## Race
+The race data will first be prepared in order to create a dataset with readable racial groups and determining the share of each racial group. 
+```{r eval=TRUE, echo=TRUE, warning=FALSE, message=FALSE}
+la_race <- la_race %>%
+  mutate(tot_pop = 13211027)  %>% filter(variable != "B02001_001")
+
+rgroups <- c("White alone", "Black or African American alone", "AIAN alone", "Asian alone", "NHPI alone", "Some or other race alone", "Two or more races", "Two races including Some other race", "Two races excluding Some other race, and three or more races")
+
+la_race <- la_race %>%
+  mutate(race_groups = rep(rgroups, length(unique(name)))) 
+
+la_race <- la_race %>%
+  mutate(pop_share = estimate/tot_pop) %>%
+  select(estimate, race_groups, pop_share)
+
+ggplot(la_race, aes(x="", y=pop_share, fill=race_groups)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", start=0) +
+  theme_void() +
+  scale_fill_manual(values = palette9,
+                    name = "Race") +
+    labs(subtitle="Los Angeles County: 2020 - Pie Chart", 
+       title= "Figure 5a: Breakdown of Race") 
+```
+
+Figure 5a finds that almost 50% of Los Angeles County is White alone, followed by some or other race alone and Asian as the three largest racial groups in the region. This is an interesting finding when noticing that Black or African American alone and Native Hawaiian and Pacific Islander alone has a rather small composition because the City of Los Angeles is known for its diversity, which can even be seen spatially in the plethora of ethnic enclaves. However this may indicate that the suburbs that comprise Los Angeles County are predominantly White.  
+
+```{r eval=TRUE, echo=TRUE, warning=FALSE, message=FALSE}
+ggplot(la_race, aes(x=pop_share, y=reorder(race_groups, pop_share))) + 
+  geom_bar(stat="identity", width=.5, fill="#fcc602") + 
+  labs(title="Figure 5b: Breakdown of Race", 
+       subtitle="Los Angeles County: 2020 - Bar Chart",
+       x = "Percent",
+       y = "Race") + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6))
+```
+
+Figure 5b provides another method of data visualization for the region's racial breakdown which can be seen through bar charts.
+
+## Education
+
+When looking at the education component of the regional demographic profile, it is clear that Los Angeles County has a significant share of people whose highest level of education is some form of higher education.
+
+```{r eval=TRUE, echo=TRUE, warning=FALSE, message=FALSE}
+la_ed <- la_ed %>%
+  mutate(tot_pop = 9092035) %>%
+  filter(variable != "B15003_001")
+
+edgroups <- c("No schooling completed", "Nursery school", "Kindergarten", "1st grade", "2nd grade", "3rd grade", "4th grade", "5th grade", "6th grade","7th grade","8th grade", "9th grade", "10th grade", "11th grade", "12th grade, no diploma", "Regular high school diploma", "GED or alternative credential", "Some college, less than 1 year", "Some college, 1 or more years, no degree", "Associate's degree", "Bachelor's degree","Master's degree", "Professional school degree", "Doctorate degree")
+
+la_ed <- la_ed %>%
+  mutate(ed_groups = rep(edgroups, length(unique(name)))) 
+
+la_ed <- la_ed %>%
+  mutate(ed_share_2020 = estimate/tot_pop) %>%
+  select(estimate, ed_groups, ed_share_2020)
+
+la_ed$year <- "2020"
+
+la_ed <- la_ed[order(la_ed$ed_share_2020,decreasing=T)[1:24],]
+
+la_ed <- la_ed %>%
+  mutate(ed_share = ed_share_2020 * 100)
+
+ggplot(la_ed, aes(fill=ed_groups, y=ed_share, x=year)) + 
+  geom_bar(position="stack", stat="identity") +
+  scale_fill_manual(values = palette24) + 
+    labs(title="Figure 6: Educational Attainment of Population 25 and above", 
+         subtitle="Los Angeles County: 2020 - Stacked Bar Plot",
+       x = "Year",
+       y = "% Share")
+```
+
+# Conclusion
+The regional demographic profile for Los Angeles County looks at high level estimates such as population, natural increase, and migration, as well as more detailed characteristics including age, race, and education. This profile is detrimental in understanding what makes the region unique and seeing the factors that drive economic increase or decline. The analysis finds a handful of key components:
+
+- The population is decreasing: various factors come to play including people migrating out of the region, as well as a high rate of death compared to births.
+- People are leaving: in addition to the migration out of the region, the age pyramid provides a clear look that the late teenage/early adult groups are minimal in the region, which may be attributed to factors like school or work.
+- Highly educated: the region has a large share of people who have gone on to receive some form of higher education.
